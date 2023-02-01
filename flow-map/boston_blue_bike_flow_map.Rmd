@@ -12,25 +12,41 @@ library("od")
 library("sf")
 library("tmap")
 library("dplyr")
+library("readr")
+library("here")
+
 
 ```
 
-## R Markdown
+In this script I lean heavily on the od package vignette to 
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r read in the data}
+# read in the data and clean the column names to make processing easier
+blue_bike_data  <- read_csv(here("data","202212-bluebikes-tripdata.csv")) |> janitor::clean_names()
+```
+I need to transform the data into origin-destination format. So that there is an is an origin column, destination column, and trip count column - in addition to the accessory data. 
 
-```{r cars}
-summary(cars)
+
+```{r create a location table}
+# first select necessary start columns
+station_locations <- blue_bike_data |> select(start_station_id, start_station_latitude, start_station_longitude)
+
+# remove start from column names
+colnames(station_locations) <- gsub(pattern = "start_", replacement = "", x= colnames(station_locations))
+
+# turn into point locations. I'm assuming the lat long crs is mercator
+station_locations <- st_as_sf(station_locations, coords = c("station_longitude","station_latitude"),crs=4326)
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+Here's a qucik plot of all the blue bike station locations in boston as of 2022
+```{r}
+tmap_mode("view")
+tm_shape()
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+blue_bike_data %>% group_by(start_station_id, end_station_id) |> mutate(count = n()) |> select(start_station_id, end_station_id, count, everything()) |> arrange(desc(count))
+```
+
