@@ -24,13 +24,18 @@ In this script I lean heavily on the od package vignette to
 ```{r read in the data}
 # read in the data and clean the column names to make processing easier
 blue_bike_data  <- read_csv(here("data","202212-bluebikes-tripdata.csv")) |> janitor::clean_names()
+
+# get blue bike station locations
+station_data <- read_csv(here("data", "current_bluebikes_stations.csv"), skip = 1)|> janitor::clean_names()
 ```
 I need to transform the data into origin-destination format. So that there is an is an origin column, destination column, and trip count column - in addition to the accessory data. 
 
 
 ```{r create a location table}
+
+##### THIS IS PROBABLY USELESS #########
 # first select necessary start columns
-station_locations <- blue_bike_data |> select(start_station_id, start_station_latitude, start_station_longitude)
+station_locations <- blue_bike_data |> select(start_station_id, start_station_latitude, start_station_longitude) |> distinct()
 
 # remove start from column names
 colnames(station_locations) <- gsub(pattern = "start_", replacement = "", x= colnames(station_locations))
@@ -39,14 +44,32 @@ colnames(station_locations) <- gsub(pattern = "start_", replacement = "", x= col
 station_locations <- st_as_sf(station_locations, coords = c("station_longitude","station_latitude"),crs=4326)
 ```
 
+
 Here's a qucik plot of all the blue bike station locations in boston as of 2022
 ```{r}
 tmap_mode("view")
-tm_shape()
+tm_shape(station_locations)+
+  tm_dots()
+```
+
+
+```{r create a station name table}
+blue_bike_data |> 
+  select(start_station_id, start_station_id)
+```
+
+
+
+```{r}
+
 ```
 
 
 ```{r}
-blue_bike_data %>% group_by(start_station_id, end_station_id) |> mutate(count = n()) |> select(start_station_id, end_station_id, count, everything()) |> arrange(desc(count))
+blue_bike_data |> 
+  group_by(start_station_id, end_station_id) |>
+  mutate(count = n()) |> 
+  select(start_station_id, end_station_id, count, everything()) |> 
+  arrange(desc(count))
 ```
 
