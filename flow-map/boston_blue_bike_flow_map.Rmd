@@ -14,7 +14,7 @@ library("tmap")
 library("dplyr")
 library("readr")
 library("here")
-
+library("dodgr")
 
 ```
 
@@ -30,18 +30,32 @@ station_data <- read_csv(here("data", "current_bluebikes_stations.csv"), skip = 
 ```
 I need to transform the data into origin-destination format. So that there is an is an origin column, destination column, and trip count column - in addition to the accessory data. 
 
+```{r r}
+start_end_count <- blue_bike_data |> 
+  select(start_station_id,start_station_name, end_station_id, end_station_name) |> 
+  group_by(start_station_name, end_station_name) |>
+  summarize(count = n()) |> 
+  select(start_station_name, end_station_name, count, everything()) |> 
+  arrange(desc(count))
+```
 
-```{r create a location table}
 
-##### THIS IS PROBABLY USELESS #########
-# first select necessary start columns
-station_locations <- blue_bike_data |> select(start_station_id, start_station_latitude, start_station_longitude) |> distinct()
+```{r make station data spatial }
+station_locations <- st_as_sf(station_data, coords = c("longitude", "latitude"), crs=4326) |> select(name, everything())
+```
 
-# remove start from column names
-colnames(station_locations) <- gsub(pattern = "start_", replacement = "", x= colnames(station_locations))
+```{r}
+desire_lines = od_to_sf(start_end_count, station_locations)
+tmap_mode("plot")
+tm_shape(desire_line)+
+  tm_lines(lwd = "count", col = "count", palette = "blue")
+```
 
-# turn into point locations. I'm assuming the lat long crs is mercator
-station_locations <- st_as_sf(station_locations, coords = c("station_longitude","station_latitude"),crs=4326)
+```{r}
+desire_lines = od_to_network(start_end_count, station_locations)
+tmap_mode("plot")
+tm_shape(desire_line)+
+  tm_lines(lwd = "count", col = "count", palette = "blue")
 ```
 
 
@@ -66,10 +80,6 @@ blue_bike_data |>
 
 
 ```{r}
-blue_bike_data |> 
-  group_by(start_station_id, end_station_id) |>
-  mutate(count = n()) |> 
-  select(start_station_id, end_station_id, count, everything()) |> 
-  arrange(desc(count))
+
 ```
 
