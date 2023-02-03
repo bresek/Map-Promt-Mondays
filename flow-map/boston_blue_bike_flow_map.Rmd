@@ -15,7 +15,7 @@ library("dplyr")
 library("readr")
 library("here")
 library("dodgr")
-
+library("stplanr")
 ```
 
 In this script I lean heavily on the od package vignette to 
@@ -45,41 +45,49 @@ station_locations <- st_as_sf(station_data, coords = c("longitude", "latitude"),
 ```
 
 ```{r}
-desire_lines = od_to_sf(start_end_count, station_locations)
-tmap_mode("plot")
-tm_shape(desire_line)+
-  tm_lines(lwd = "count", col = "count", palette = "blue")
-```
-
-```{r}
-desire_lines = od_to_network(start_end_count, station_locations)
-tmap_mode("plot")
-tm_shape(desire_line)+
-  tm_lines(lwd = "count", col = "count", palette = "blue")
-```
-
-
-Here's a qucik plot of all the blue bike station locations in boston as of 2022
-```{r}
 tmap_mode("view")
 tm_shape(station_locations)+
-  tm_dots()
+  tm_dots(col="district")
 ```
 
 
-```{r create a station name table}
-blue_bike_data |> 
-  select(start_station_id, start_station_id)
+To constrain the network I'm filtering out Revere. I mighgt filter out outhers
+```{r}
+# Filter out revere stations 
+station_locations <- station_locations |> 
+  filter(district!="Salem") |> 
+  filter(!is.na(district))
+
+# Filter out our rows that aren't in the station location table
+station_names <- unique(station_locations$name)
+
+start_end_count <- 
+  start_end_count |> 
+  filter(start_station_name %in% station_names) |> 
+  filter(end_station_name %in% station_names)
 ```
 
+
+```{r}
+desire_lines <- od2line(start_end_count, station_locations)
+```
+
+```{r}
+tmap_mode("view")
+tm_shape(desire_lines)+
+  tm_lines(lwd = "count", col = "count", palette = "blue")
+```
 
 
 ```{r}
 
+blue_bikes_routed <- route(l = desire_lines_sample, route_fun = route_osrm, osrm.profile = "bike")
 ```
 
 
 ```{r}
-
+tmap_mode("plot")
+tm_shape(route_test)+
+  tm_lines(col = "count")
 ```
 
