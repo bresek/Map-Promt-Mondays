@@ -8,6 +8,7 @@ output: html_document
 ```{r setup, include=FALSE}
 rm(list=ls())
 knitr::opts_chunk$set(echo = TRUE)
+library("purrr")
 library("od")
 library("sf")
 library("tmap")
@@ -16,17 +17,30 @@ library("readr")
 library("here")
 library("dodgr")
 library("stplanr")
+library("ggplot2")
 ```
 
 In this script I lean heavily on the od package vignette to 
 
 
 ```{r read in the data}
-# read in the data and clean the column names to make processing easier
-blue_bike_data  <- read_csv(here("data","202212-bluebikes-tripdata.csv")) |> janitor::clean_names()
 
-# get blue bike station locations
-station_data <- read_csv(here("data", "current_bluebikes_stations.csv"), skip = 1)|> janitor::clean_names()
+# Set data folder name
+data_folder <- "data"
+
+# Get a list of all csvs of blue bike trip data
+trip_data_list <- list.files(data_folder, pattern = "tripdata.csv")
+
+# Read in each csv, combine into single data frame, and clean column names
+blue_bike_data <-
+  map(trip_data_list, ~ read_csv(here(data_folder, .),)) |>
+  reduce(rbind) |>
+  janitor::clean_names()
+
+# Read in blue bike station locations and clean column names
+station_data <-
+  read_csv(here(data_folder, "current_bluebikes_stations.csv"), skip = 1) |>
+  janitor::clean_names()
 ```
 I need to transform the data into origin-destination format. So that there is an is an origin column, destination column, and trip count column - in addition to the accessory data. 
 
@@ -67,9 +81,23 @@ start_end_count <-
   filter(end_station_name %in% station_names)
 ```
 
+```{r}
+# Histogram of the number of rides
+ggplot(data=start_end_count, aes(x=count))+
+  geom_histogram()+
+  scale_x_log10()
+start_end_count |>
+  filter(count > 500) |>
+  ggplot(aes(x=count))+
+  geom_histogram()
+```
+
 
 ```{r}
 desire_lines <- od2line(start_end_count, station_locations)
+
+# Filter to reduce insane load time on routing service
+desire_lines_over_100_rides <- desire_lines |> filter(count > 100)
 ```
 
 ```{r}
@@ -78,16 +106,72 @@ tm_shape(desire_lines)+
   tm_lines(lwd = "count", col = "count", palette = "blue")
 ```
 
-
 ```{r}
-
-blue_bikes_routed <- route(l = desire_lines_sample, route_fun = route_osrm, osrm.profile = "bike")
+tm_shape(desire_lines_over_100_rides)+
+  tm_lines(lwd = "count", col = "count", palette = "white")+
+  tm_layout(bg.color = "black", legend.outside = TRUE)
 ```
 
 
 ```{r}
-tmap_mode("plot")
-tm_shape(route_test)+
-  tm_lines(col = "count")
+
+blue_bikes_routed_fp <- here("output", "blue_bikes_flow_map.gpkg")
+if (file.exists(blue_bikes_routed_fp)){
+  print("")
+  blue_bikes_routed <- st_read(blue_bikes_routed_fp)
+}else{
+  print("creating routed blue bike geometry...")
+  blue_bikes_routed <- route(l = desire_lines_over_100_rides, route_fun = route_osrm, osrm.profile = "bike")
+  st_write(blue_bikes_routed, blue_bikes_routed_fp)
+}
+
 ```
+
+```{r}
+# I buffer because they weren't intersecting with their corresponding location. Units are meters
+buffered_stations <- st_buffer(station_locations, 3)
+
+# Get the stations that intersect with the bike route lines
+plotted_stations <- station_locations[lengths(st_intersects(buffered_stations, blue_bikes_routed) )> 0,]
+
+# Calculate the number of departures from each station
+station_departures <-
+  start_end_count |> group_by(start_station_name) |>
+  summarise(total_departures = sum(count)) |>
+  arrange(desc(total_departures)) |>
+  rename("name" = "start_station_name")
+
+# Calculate the number of arrivals at each station
+station_arrivals <-
+  start_end_count |> group_by(end_station_name) |>
+  summarise(total_arrivals = sum(count)) |>
+  arrange(desc(total_arrivals)) |>
+  rename("name" = "end_station_name")
+```
+
+
+```{r}
+# Join the two dataframes
+plotted_stations <- left_join(plotted_stations, station_departures) |>
+  left_join(station_arrivals)
+
+# Calculate total trips
+plotted_stations <- plotted_stations |> mutate(total_trips = total_departures+total_arrivals)
+
+
+
+bb_route_map <-
+  tm_shape(plotted_stations)+
+  tm_symbols(col = "white", size = "total_trips", perceptual = TRUE,scale=.5,alpha=.9,legend.size.show = FALSE, border.lwd = NA)+
+  tm_shape(station_buffered)+
+  tm_polygons()+
+  tm_shape(blue_bikes_routed)+
+  tm_lines(lwd = "count",
+           col = "white", alpha=.3, scale = 6, legend.lwd.show = FALSE)+
+  tm_layout(bg.color = "black", legend.show = FALSE, panel.show = FALSE)
+bb_route_map
+tmap_save(bb_route_map, filename = here("output", "bb_route_map.png"), dpi = 1200)
+savehistory("~/programming/GIS/Map-Promt-Mondays/flow-map/history.Rhistory")
+```
+
 
