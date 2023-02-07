@@ -163,8 +163,6 @@ plotted_stations <- plotted_stations |> mutate(total_trips = total_departures+to
 bb_route_map <-
   tm_shape(plotted_stations)+
   tm_symbols(col = "white", size = "total_trips", perceptual = TRUE,scale=.5,alpha=.9,legend.size.show = FALSE, border.lwd = NA)+
-  tm_shape(station_buffered)+
-  tm_polygons()+
   tm_shape(blue_bikes_routed)+
   tm_lines(lwd = "count",
            col = "white", alpha=.3, scale = 6, legend.lwd.show = FALSE)+
