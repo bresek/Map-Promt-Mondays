@@ -20,8 +20,8 @@ library("stplanr")
 library("ggplot2")
 ```
 
-In this script I lean heavily on the od package vignette to 
 
+I learned about origin destination and routing from Chapter 13 of https://geocompr.robinlovelace.net/transport.html. 
 
 ```{r read in the data}
 
